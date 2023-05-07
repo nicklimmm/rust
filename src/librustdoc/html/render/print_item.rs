@@ -1245,13 +1245,13 @@ fn item_enum(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item, e: &clean::
     let tcx = cx.tcx();
     let count_variants = e.variants().count();
     wrap_item(w, |mut w| {
-        render_attributes_in_code(w, it, tcx);
         write!(
             w,
-            "{}enum {}{}",
-            visibility_print_with_space(it.visibility(tcx), it.item_id, cx),
-            it.name.unwrap(),
-            e.generics.print(cx),
+            "{attrs}{vis}enum {name}{generics}",
+            attrs = render_attributes_in_code(it, tcx),
+            vis = visibility_print_with_space(it.visibility(tcx), it.item_id, cx),
+            name = it.name.unwrap(),
+            generics = e.generics.print(cx),
         );
         if !print_where_clause_and_check(w, &e.generics, cx) {
             // If there wasn't a `where` clause, we add a whitespace.
@@ -1493,7 +1493,7 @@ fn item_constant(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item, c: &cle
 
 fn item_struct(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item, s: &clean::Struct) {
     wrap_item(w, |w| {
-        render_attributes_in_code(w, it, cx.tcx());
+        write!(w, "{}", render_attributes_in_code(it, cx.tcx()));
         render_struct(w, it, Some(&s.generics), s.ctor_kind, &s.fields, "", true, cx);
     });
 
@@ -1542,29 +1542,57 @@ fn item_struct(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item, s: &clean
 }
 
 fn item_static(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item, s: &clean::Static) {
-    wrap_item(w, |w| {
-        render_attributes_in_code(w, it, cx.tcx());
-        write!(
-            w,
-            "{vis}static {mutability}{name}: {typ}",
-            vis = visibility_print_with_space(it.visibility(cx.tcx()), it.item_id, cx),
-            mutability = s.mutability.print_with_space(),
-            name = it.name.unwrap(),
-            typ = s.type_.print(cx)
-        );
-    });
-    write!(w, "{}", document(cx, it, None, HeadingOffset::H2))
+    #[derive(Template)]
+    #[template(path = "item_static.html")]
+    struct ItemStatic<'a, 'cx> {
+        cx: std::cell::RefCell<&'a mut Context<'cx>>,
+        it: &'a clean::Item,
+        s: &'a clean::Static,
+    }
+
+    impl<'a, 'cx: 'a> ItemStatic<'a, 'cx> {
+        fn render_attributes_in_code<'b>(
+            &'b self,
+        ) -> impl fmt::Display + Captures<'a> + 'b + Captures<'cx> {
+            display_fn(move |f| {
+                let tcx = self.cx.borrow().tcx();
+                let v = render_attributes_in_code(self.it, tcx);
+                write!(f, "{v}")
+            })
+        }
+
+        fn render_static<'b>(&'b self) -> impl fmt::Display + Captures<'a> + 'b + Captures<'cx> {
+            display_fn(move |f| {
+                let cx = self.cx.borrow();
+                let vis =
+                    visibility_print_with_space(self.it.visibility(cx.tcx()), self.it.item_id, *cx);
+                let typ = self.s.type_.print(*cx);
+                write!(
+                    f,
+                    "{vis}static {mutability}{name}: {typ}",
+                    mutability = self.s.mutability.print_with_space(),
+                    name = self.it.name.unwrap(),
+                )
+            })
+        }
+
+        fn document<'b>(&'b self) -> impl fmt::Display + Captures<'a> + 'b + Captures<'cx> {
+            let mut cx = self.cx.borrow_mut();
+            display_fn(move |f| write!(f, "{}", document(*cx, self.it, None, HeadingOffset::H2)))
+        }
+    }
+
+    ItemStatic { cx: std::cell::RefCell::new(cx), it, s }.render_into(w).unwrap();
 }
 
 fn item_foreign_type(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item) {
     wrap_item(w, |w| {
-        w.write_str("extern {\n");
-        render_attributes_in_code(w, it, cx.tcx());
         write!(
             w,
-            "    {}type {};\n}}",
-            visibility_print_with_space(it.visibility(cx.tcx()), it.item_id, cx),
-            it.name.unwrap(),
+            "extern {{\n{attrs}    {vis}type {name};\n}}",
+            attrs = render_attributes_in_code(it, cx.tcx()),
+            vis = visibility_print_with_space(it.visibility(cx.tcx()), it.item_id, cx),
+            name = it.name.unwrap(),
         );
     });
 
