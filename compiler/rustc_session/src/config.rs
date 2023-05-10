@@ -518,6 +518,12 @@ pub struct ExternEntry {
     /// `--extern nounused:std=/path/to/lib/libstd.rlib`. This is used to
     /// suppress `unused-crate-dependencies` warnings.
     pub nounused_dep: bool,
+    /// If the extern entry is not referenced in the crate, force it to be resolved anyway.
+    ///
+    /// Allows a dependency satisfying, for instance, a missing panic handler to be injected
+    /// without modifying source:
+    /// `--extern force:extras=/path/to/lib/libstd.rlib`
+    pub force: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -556,7 +562,13 @@ impl Externs {
 
 impl ExternEntry {
     fn new(location: ExternLocation) -> ExternEntry {
-        ExternEntry { location, is_private_dep: false, add_prelude: false, nounused_dep: false }
+        ExternEntry {
+            location,
+            is_private_dep: false,
+            add_prelude: false,
+            nounused_dep: false,
+            force: false,
+        }
     }
 
     pub fn files(&self) -> Option<impl Iterator<Item = &CanonicalizedPath>> {
@@ -587,6 +599,7 @@ pub enum PrintRequest {
     StackProtectorStrategies,
     LinkArgs,
     SplitDebuginfo,
+    DeploymentTarget,
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1469,7 +1482,7 @@ pub fn rustc_short_optgroups() -> Vec<RustcOptGroup> {
             "[crate-name|file-names|sysroot|target-libdir|cfg|calling-conventions|\
              target-list|target-cpus|target-features|relocation-models|code-models|\
              tls-models|target-spec-json|all-target-specs-json|native-static-libs|\
-             stack-protector-strategies|link-args]",
+             stack-protector-strategies|link-args|deployment-target]",
         ),
         opt::flagmulti_s("g", "", "Equivalent to -C debuginfo=2"),
         opt::flagmulti_s("O", "", "Equivalent to -C opt-level=2"),
@@ -1919,6 +1932,7 @@ fn collect_print_requests(
         ("all-target-specs-json", PrintRequest::AllTargetSpecs),
         ("link-args", PrintRequest::LinkArgs),
         ("split-debuginfo", PrintRequest::SplitDebuginfo),
+        ("deployment-target", PrintRequest::DeploymentTarget),
     ];
 
     prints.extend(matches.opt_strs("print").into_iter().map(|req| {
@@ -2261,6 +2275,7 @@ pub fn parse_externs(
         let mut is_private_dep = false;
         let mut add_prelude = true;
         let mut nounused_dep = false;
+        let mut force = false;
         if let Some(opts) = options {
             if !is_unstable_enabled {
                 early_error(
@@ -2283,6 +2298,7 @@ pub fn parse_externs(
                         }
                     }
                     "nounused" => nounused_dep = true,
+                    "force" => force = true,
                     _ => early_error(error_format, &format!("unknown --extern option `{opt}`")),
                 }
             }
@@ -2293,6 +2309,8 @@ pub fn parse_externs(
         entry.is_private_dep |= is_private_dep;
         // likewise `nounused`
         entry.nounused_dep |= nounused_dep;
+        // and `force`
+        entry.force |= force;
         // If any flag is missing `noprelude`, then add to the prelude.
         entry.add_prelude |= add_prelude;
     }
