@@ -1510,13 +1510,13 @@ fn print_tuple_struct_fields<'a, 'cx: 'a>(
 fn item_enum(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item, e: &clean::Enum) {
     let count_variants = e.variants().count();
     wrap_item(w, |w| {
-        render_attributes_in_code(w, it, cx);
         write!(
             w,
-            "{}enum {}{}",
+            "{attrs}{}enum {}{}",
             visibility_print_with_space(it, cx),
             it.name.unwrap(),
             e.generics.print(cx),
+            attrs = render_attributes_in_code(it, cx),
         );
 
         render_enum_fields(
@@ -1840,11 +1840,11 @@ fn item_primitive(w: &mut impl fmt::Write, cx: &mut Context<'_>, it: &clean::Ite
 fn item_constant(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item, c: &clean::Constant) {
     wrap_item(w, |w| {
         let tcx = cx.tcx();
-        render_attributes_in_code(w, it, cx);
 
         write!(
             w,
-            "{vis}const {name}{generics}: {typ}{where_clause}",
+            "{attrs}{vis}const {name}{generics}: {typ}{where_clause}",
+            attrs = render_attributes_in_code(it, cx),
             vis = visibility_print_with_space(it, cx),
             name = it.name.unwrap(),
             generics = c.generics.print(cx),
@@ -1889,7 +1889,7 @@ fn item_constant(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item, c: &cle
 
 fn item_struct(w: &mut Buffer, cx: &mut Context<'_>, it: &clean::Item, s: &clean::Struct) {
     wrap_item(w, |w| {
-        render_attributes_in_code(w, it, cx);
+        write!(w, "{}", render_attributes_in_code(it, cx));
         render_struct(w, it, Some(&s.generics), s.ctor_kind, &s.fields, "", true, cx);
     });
 
@@ -1945,10 +1945,10 @@ fn item_fields(
 
 fn item_static(w: &mut impl fmt::Write, cx: &mut Context<'_>, it: &clean::Item, s: &clean::Static) {
     wrap_item(w, |buffer| {
-        render_attributes_in_code(buffer, it, cx);
         write!(
             buffer,
-            "{vis}static {mutability}{name}: {typ}",
+            "{attrs}{vis}static {mutability}{name}: {typ}",
+            attrs = render_attributes_in_code(it, cx),
             vis = visibility_print_with_space(it, cx),
             mutability = s.mutability.print_with_space(),
             name = it.name.unwrap(),
@@ -1962,13 +1962,12 @@ fn item_static(w: &mut impl fmt::Write, cx: &mut Context<'_>, it: &clean::Item, 
 
 fn item_foreign_type(w: &mut impl fmt::Write, cx: &mut Context<'_>, it: &clean::Item) {
     wrap_item(w, |buffer| {
-        buffer.write_str("extern {\n").unwrap();
-        render_attributes_in_code(buffer, it, cx);
         write!(
             buffer,
-            "    {}type {};\n}}",
+            "extern {{\n{attrs}    {}type {};\n}}",
             visibility_print_with_space(it, cx),
             it.name.unwrap(),
+            attrs = render_attributes_in_code(it, cx),
         )
         .unwrap();
     });

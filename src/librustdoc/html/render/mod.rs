@@ -954,7 +954,7 @@ fn assoc_method(
         write!(w, "{}", render_attributes_in_pre(meth, indent_str, cx));
         (4, indent_str, Ending::NoNewline)
     } else {
-        render_attributes_in_code(w, meth, cx);
+        write!(w, "{}", render_attributes_in_code(meth, cx));
         (0, "", Ending::Newline)
     };
     w.reserve(header_len + "<a href=\"\" class=\"fn\">{".len() + "</a>".len());
@@ -1160,10 +1160,16 @@ fn render_attributes_in_pre<'a, 'tcx: 'a>(
 
 // When an attribute is rendered inside a <code> tag, it is formatted using
 // a div to produce a newline after it.
-fn render_attributes_in_code(w: &mut impl fmt::Write, it: &clean::Item, cx: &Context<'_>) {
-    for attr in it.attributes(cx.tcx(), cx.cache(), false) {
-        write!(w, "<div class=\"code-attribute\">{attr}</div>").unwrap();
-    }
+fn render_attributes_in_code<'a, 'cx: 'a>(
+    it: &'a clean::Item,
+    cx: &'a Context<'cx>,
+) -> impl fmt::Display + Captures<'a> + Captures<'cx> {
+    display_fn(move |f| {
+        for attr in it.attributes(cx.tcx(), cx.cache(), false) {
+            write!(f, "<div class=\"code-attribute\">{attr}</div>")?;
+        }
+        Ok(())
+    })
 }
 
 #[derive(Copy, Clone)]
